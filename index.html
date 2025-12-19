@@ -3,15 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>出庫管理システム</title>
+    <title>HT出庫システム Ver.1.0</title>
     <style>
+        /* 現場での視認性を高める簡素なデザイン */
         body { font-family: sans-serif; margin: 0; padding: 10px; background: #fff; color: #000; }
-        .screen { display: none; } /* 初期状態はすべて非表示 */
-        .active { display: block; } /* アクティブな画面のみ表示 */
-
+        .screen { display: none; } 
+        .active { display: block; }
+        
         h2 { font-size: 1.2rem; border-bottom: 2px solid #000; padding-bottom: 5px; margin-bottom: 15px; }
         label { display: block; font-size: 0.9rem; font-weight: bold; margin-bottom: 5px; }
         
+        /* 大きな入力欄：BT-A500のテンキーやスキャンに最適化 */
         input { 
             width: 100%; padding: 12px; font-size: 1.5rem; font-weight: bold;
             border: 2px solid #000; box-sizing: border-box; margin-bottom: 20px; 
@@ -19,53 +21,55 @@
 
         /* メニューボタン */
         .menu-btn { 
-            width: 100%; padding: 25px; font-size: 1.5rem; font-weight: bold;
-            background: #fff; border: 3px solid #000; cursor: pointer; text-align: center;
+            width: 100%; padding: 30px; font-size: 1.5rem; font-weight: bold;
+            background: #eee; border: 3px solid #000; cursor: pointer; text-align: center;
         }
 
-        /* 結果表示エリア */
-        #result-area { display: none; padding: 10px; border: 2px solid #000; margin-top: 10px; }
-        .ok { background: #d1ffd1; }
-        .ng { background: #ffcccc; }
-        #qty-display { display: none; text-align: center; font-size: 5rem; font-weight: bold; margin: 10px 0; }
+        /* 照合判定エリア */
+        #result-area { display: none; padding: 15px; border: 3px solid #000; margin-top: 10px; text-align: center; }
+        .ok { background: #d1ffd1; } /* 照合一致（薄緑） */
+        .ng { background: #ffcccc; } /* 照合失敗（薄赤） */
         
-        .footer-info { font-size: 1rem; border-top: 1px solid #000; padding-top: 10px; margin-top: 10px; }
-        .btn-action { width: 100%; padding: 15px; font-weight: bold; margin-top: 20px; border: 2px solid #000; background: #fff; }
+        /* 数量：一致時のみ巨大表示 */
+        #qty-display { display: none; font-size: 6rem; font-weight: bold; line-height: 1; margin: 10px 0; }
+        
+        .footer-info { font-size: 1rem; border-top: 1px solid #000; padding-top: 10px; margin-top: 10px; text-align: left; }
+        .btn-action { width: 100%; padding: 15px; font-weight: bold; margin-top: 20px; border: 2px solid #000; background: #fff; cursor: pointer; }
     </style>
 </head>
 <body>
 
     <div id="screen-login" class="screen active">
         <h2>作業者認証</h2>
-        <label>名前コード(4桁)を入力してください</label>
-        <input type="text" id="nameCode" inputmode="numeric" maxlength="4" placeholder="0000">
-        <p style="font-size: 0.8rem;">※テスト用コード: 1111</p>
+        <label>名前コード(4桁)を入力</label>
+        <input type="text" id="nameCode" inputmode="numeric" maxlength="4" placeholder="1111" autofocus>
     </div>
 
     <div id="screen-menu" class="screen">
-        <h2>メニュー選択</h2>
-        <div class="menu-btn" onclick="goToShipping()">出庫作業</div>
-        <p style="margin-top:20px; color:#666;">作業を選択してください</p>
+        <h2>メインメニュー</h2>
+        <div class="menu-btn" onclick="goToShipping()">出庫作業 開始</div>
+        <p style="text-align:center; color:#666; margin-top:20px;">BT-A500 運用モード</p>
     </div>
 
     <div id="screen-shipping" class="screen">
-        <h2>出庫：照合スキャン</h2>
-        <label>① 棚番号を入力</label>
-        <input type="text" id="shelfInput" placeholder="棚番">
+        <h2>出庫照合スキャン</h2>
+        <label>1. 棚札コードをスキャン</label>
+        <input type="text" id="shelfInput" placeholder="棚札">
 
-        <label>② 商品QRをスキャン</label>
-        <input type="text" id="qrInput" placeholder="QRコード">
+        <label>2. 商品QRをスキャン</label>
+        <input type="text" id="qrInput" placeholder="QR内容">
 
         <div id="result-area">
-            <div id="status-text" style="text-align:center; font-weight:bold; font-size:1.5rem;"></div>
+            <div id="status-text" style="font-weight:bold; font-size:1.6rem;"></div>
             <div id="qty-display">0</div>
             <div class="footer-info">
                 品番：<span id="res-code"></span><br>
                 ロケ：<span id="res-loc"></span>
             </div>
         </div>
-        <button class="btn-action" onclick="downloadCSV()">作業完了(CSV保存)</button>
-        <button class="btn-action" style="border:none; text-decoration:underline;" onclick="location.reload()">メニューに戻る</button>
+
+        <button class="btn-action" onclick="downloadCSV()">書き出し (CSV保存)</button>
+        <button class="btn-action" style="border:none; text-decoration:underline; font-size:0.8rem;" onclick="location.reload()">メニューへ戻る</button>
     </div>
 
     <script>
@@ -73,11 +77,13 @@
         const shelfIn = document.getElementById('shelfInput');
         const qrIn = document.getElementById('qrInput');
         let logs = [];
+        let currentWorker = "";
 
-        // ログイン処理：1111を入力してENTを押すとメニューへ
+        // ログイン処理：名前コード「1111」でログイン
         nameCodeIn.onkeydown = (e) => {
             if (e.key === 'Enter') {
                 if (nameCodeIn.value === "1111") {
+                    currentWorker = nameCodeIn.value;
                     showScreen('screen-menu');
                 } else {
                     alert("名前コードが違います");
@@ -86,53 +92,73 @@
             }
         };
 
-        // メニューから出庫へ
         function goToShipping() {
             showScreen('screen-shipping');
-            setTimeout(() => shelfIn.focus(), 100);
+            setTimeout(() => shelfIn.focus(), 200);
         }
 
-        // 出庫画面の遷移
+        // 入力遷移：棚札(ENT) -> QRへ
         shelfIn.onkeydown = (e) => { if(e.key === 'Enter') qrIn.focus(); };
-        qrIn.onkeydown = (e) => { if(e.key === 'Enter') checkProcess(); };
+        // QR(ENT) -> 照合処理の実行
+        qrIn.onkeydown = (e) => { if(e.key === 'Enter') runVerification(); };
 
-        // 画面切り替え関数
-        function showScreen(screenId) {
+        function showScreen(id) {
             document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-            document.getElementById(screenId).classList.add('active');
+            document.getElementById(id).classList.add('active');
         }
 
-        // 照合ロジック
-        function checkProcess() {
-            const targetLoc = shelfIn.value.trim().toUpperCase();
-            const qrData = qrIn.value.split(',');
+        // 照合・ログ記録ロジック
+        function runVerification() {
+            const shelfCode = shelfIn.value.trim().toUpperCase();
+            const qrRaw = qrIn.value.trim();
+            const data = qrRaw.split(',');
 
-            if (qrData.length < 5) {
-                alert("QR形式エラー");
+            if (data.length < 5) {
+                alert("QRデータ形式エラー (カンマ区切り5項目必要)");
+                qrIn.value = "";
                 return;
             }
 
-            const pCode = qrData[2];
-            const pQty  = qrData[3];
-            const pLoc  = qrData[4].trim().toUpperCase();
-            const isMatch = (targetLoc === pLoc);
+            const pSerial = data[0]; // ① 生産日(シリアル)
+            const pLine   = data[1]; // ② 生産ライン
+            const pCode   = data[2]; // ③ 部品コード
+            const pQty    = data[3]; // ④ 数量
+            const pLoc    = data[4]; // ⑤ ロケ
+
+            // フロー図の判定：③部品コード ＝ 棚札コード
+            const isMatch = (shelfCode === pCode.toUpperCase());
 
             const resArea = document.getElementById('result-area');
             const qtyDisp = document.getElementById('qty-display');
             
             resArea.style.display = 'block';
             resArea.className = isMatch ? 'ok' : 'ng';
-            document.getElementById('status-text').innerText = isMatch ? "【照合一致】" : "【照合NG】";
+            document.getElementById('status-text').innerText = isMatch ? "【照合一致】" : "【NG：不一致】";
             document.getElementById('res-code').innerText = pCode;
             document.getElementById('res-loc').innerText = pLoc;
 
             if (isMatch) {
+                // 一致時のみ数量を表示
                 qtyDisp.style.display = 'block';
                 document.getElementById('qty-display').innerText = pQty;
-                logs.push([pCode, "出庫", pLoc, targetLoc, new Date().toLocaleString(), "一致"].join(','));
-                qrIn.value = "";
+                
+                // フロー図指定の9項目でログを生成（最後の項目に生産日シリアルを配置）
+                logs.push([
+                    new Date().toLocaleString(), // 1.作業日時
+                    pCode,                       // 2.部品コード
+                    pLine,                       // 3.生産ライン
+                    "出庫",                      // 4.適用
+                    currentWorker,               // 5.作業者
+                    0,                           // 6.入庫数
+                    pQty,                        // 7.出庫数
+                    0,                           // 8.残数
+                    pSerial                      // 9.生産日（QRの先頭項目）
+                ].join(','));
+
+                qrIn.value = ""; 
                 qrIn.focus();
             } else {
+                // 不一致時は数量を隠し、2秒後にエリアを閉じる
                 qtyDisp.style.display = 'none';
                 setTimeout(() => {
                     resArea.style.display = 'none';
@@ -143,12 +169,14 @@
         }
 
         function downloadCSV() {
-            if (logs.length === 0) return alert("データがありません");
-            const content = "品番,タイプ,旧ロケ,新ロケ,日時,結果\n" + logs.join('\n');
-            const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), content], {type: 'text/csv'});
+            if (logs.length === 0) return alert("記録データがありません");
+            // Excel用BOM付きUTF-8
+            const header = "\ufeff作業日時,部品コード,生産ライン,適用,作業者,入庫数,出庫数,残数,生産日\n";
+            const content = header + logs.join('\n');
+            const blob = new Blob([content], {type: 'text/csv'});
             const a = document.createElement('a');
             a.href = URL.createObjectURL(blob);
-            a.download = "shukko_result.csv";
+            a.download = `shukko_log_${Date.now()}.csv`;
             a.click();
         }
     </script>
