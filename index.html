@@ -3,199 +3,154 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>HT出庫システム</title>
+    <title>出庫管理システム</title>
     <style>
-        /* ハンディターミナル向け高コントラスト・デザイン */
-        body { font-family: sans-serif; margin: 0; padding: 10px; background-color: #000; color: #fff; }
-        .container { width: 100%; box-sizing: border-box; }
-        h2 { font-size: 1.1rem; color: #00e676; margin: 0 0 10px 0; border-bottom: 1px solid #333; }
+        body { font-family: sans-serif; margin: 0; padding: 10px; background: #fff; color: #000; }
+        .screen { display: none; } /* 初期状態はすべて非表示 */
+        .active { display: block; } /* アクティブな画面のみ表示 */
+
+        h2 { font-size: 1.2rem; border-bottom: 2px solid #000; padding-bottom: 5px; margin-bottom: 15px; }
+        label { display: block; font-size: 0.9rem; font-weight: bold; margin-bottom: 5px; }
         
-        .section { margin-bottom: 15px; }
-        label { display: block; font-size: 0.85rem; color: #bbb; margin-bottom: 4px; }
-        input[type="text"] { 
-            width: 100%; padding: 12px 8px; font-size: 1.3rem; font-weight: bold;
-            background: #222; color: #fff; border: 2px solid #555; border-radius: 4px; box-sizing: border-box;
+        input { 
+            width: 100%; padding: 12px; font-size: 1.5rem; font-weight: bold;
+            border: 2px solid #000; box-sizing: border-box; margin-bottom: 20px; 
         }
-        input:focus { border-color: #00e676; outline: none; background: #333; }
 
-        /* 照合結果エリア */
-        #status-display { 
-            margin-top: 10px; padding: 15px; border-radius: 6px; display: none; min-height: 120px;
+        /* メニューボタン */
+        .menu-btn { 
+            width: 100%; padding: 25px; font-size: 1.5rem; font-weight: bold;
+            background: #fff; border: 3px solid #000; cursor: pointer; text-align: center;
         }
-        .error { background-color: #b71c1c; border: 3px solid #fff; animation: blink 0.5s step-end infinite alternate; }
-        .success { background-color: #1b5e20; border: 2px solid #00e676; }
-        @keyframes blink { 50% { border-color: transparent; } }
 
-        .res-title { font-size: 1.4rem; font-weight: bold; display: block; margin-bottom: 8px; text-align: center; }
-        .res-detail { font-size: 1.1rem; line-height: 1.6; }
-        .label-sm { font-size: 0.9rem; color: #eee; width: 90px; display: inline-block; }
-
-        /* 操作ボタン */
-        .actions { margin-top: 20px; }
-        button { 
-            width: 100%; padding: 18px; font-size: 1.2rem; font-weight: bold; border: none; border-radius: 8px; margin-bottom: 10px; cursor: pointer;
-        }
-        .btn-csv { background-color: #4caf50; color: white; }
-        .btn-reset { background-color: #555; color: white; font-size: 0.9rem; padding: 10px; }
-
-        /* スキャン中表示 */
-        #loading { display: none; color: #00e676; text-align: center; font-weight: bold; margin: 5px; }
+        /* 結果表示エリア */
+        #result-area { display: none; padding: 10px; border: 2px solid #000; margin-top: 10px; }
+        .ok { background: #d1ffd1; }
+        .ng { background: #ffcccc; }
+        #qty-display { display: none; text-align: center; font-size: 5rem; font-weight: bold; margin: 10px 0; }
+        
+        .footer-info { font-size: 1rem; border-top: 1px solid #000; padding-top: 10px; margin-top: 10px; }
+        .btn-action { width: 100%; padding: 15px; font-weight: bold; margin-top: 20px; border: 2px solid #000; background: #fff; }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <h2>出庫作業支援</h2>
-
-    <div class="section">
-        <label>① 棚番号を入力 (Enterで確定)</label>
-        <input type="text" id="shelfInput" placeholder="棚番スキャン" autocomplete="off">
+    <div id="screen-login" class="screen active">
+        <h2>作業者認証</h2>
+        <label>名前コード(4桁)を入力してください</label>
+        <input type="text" id="nameCode" inputmode="numeric" maxlength="4" placeholder="0000">
+        <p style="font-size: 0.8rem;">※テスト用コード: 1111</p>
     </div>
 
-    <div class="section">
-        <label>② 商品JANをスキャン</label>
-        <input type="text" id="janInput" placeholder="JANコードスキャン" autocomplete="off">
+    <div id="screen-menu" class="screen">
+        <h2>メニュー選択</h2>
+        <div class="menu-btn" onclick="goToShipping()">出庫作業</div>
+        <p style="margin-top:20px; color:#666;">作業を選択してください</p>
     </div>
 
-    <div id="loading">データ照合中...</div>
+    <div id="screen-shipping" class="screen">
+        <h2>出庫：照合スキャン</h2>
+        <label>① 棚番号を入力</label>
+        <input type="text" id="shelfInput" placeholder="棚番">
 
-    <div id="status-display">
-        <span id="res-status" class="res-title"></span>
-        <div class="res-detail">
-            <div><span class="label-sm">入力棚番:</span> <span id="out-input-shelf"></span></div>
-            <div><span class="label-sm">現在登録:</span> <span id="out-current-shelf"></span></div>
-            <div><span class="label-sm">商品コード:</span> <span id="out-jan"></span></div>
+        <label>② 商品QRをスキャン</label>
+        <input type="text" id="qrInput" placeholder="QRコード">
+
+        <div id="result-area">
+            <div id="status-text" style="text-align:center; font-weight:bold; font-size:1.5rem;"></div>
+            <div id="qty-display">0</div>
+            <div class="footer-info">
+                品番：<span id="res-code"></span><br>
+                ロケ：<span id="res-loc"></span>
+            </div>
         </div>
+        <button class="btn-action" onclick="downloadCSV()">作業完了(CSV保存)</button>
+        <button class="btn-action" style="border:none; text-decoration:underline;" onclick="location.reload()">メニューに戻る</button>
     </div>
 
-    <div class="actions">
-        <button class="btn-csv" onclick="downloadCSV()">⑧ 作業完了 (CSV保存)</button>
-        <button class="btn-reset" onclick="resetAll()">全リセット</button>
-    </div>
-</div>
+    <script>
+        const nameCodeIn = document.getElementById('nameCode');
+        const shelfIn = document.getElementById('shelfInput');
+        const qrIn = document.getElementById('qrInput');
+        let logs = [];
 
-<script>
-    // 保存データ用配列
-    let recordedLogs = [];
+        // ログイン処理：1111を入力してENTを押すとメニューへ
+        nameCodeIn.onkeydown = (e) => {
+            if (e.key === 'Enter') {
+                if (nameCodeIn.value === "1111") {
+                    showScreen('screen-menu');
+                } else {
+                    alert("名前コードが違います");
+                    nameCodeIn.value = "";
+                }
+            }
+        };
 
-    const shelfInput = document.getElementById('shelfInput');
-    const janInput = document.getElementById('janInput');
-    const statusDisplay = document.getElementById('status-display');
-    const loading = document.getElementById('loading');
-
-    // 初期フォーカス
-    shelfInput.focus();
-
-    // 棚番号入力後のEnterイベント
-    shelfInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') janInput.focus();
-    });
-
-    // JANスキャン後のEnterイベント
-    janInput.addEventListener('keypress', async (e) => {
-        if (e.key === 'Enter') {
-            await processScan();
+        // メニューから出庫へ
+        function goToShipping() {
+            showScreen('screen-shipping');
+            setTimeout(() => shelfIn.focus(), 100);
         }
-    });
 
-    // ③④⑤⑥ メインロジック
-    async function processScan() {
-        const inputShelf = shelfInput.value.trim();
-        const janCode = janInput.value.trim();
+        // 出庫画面の遷移
+        shelfIn.onkeydown = (e) => { if(e.key === 'Enter') qrIn.focus(); };
+        qrIn.onkeydown = (e) => { if(e.key === 'Enter') checkProcess(); };
 
-        if (!inputShelf || !janCode) return;
+        // 画面切り替え関数
+        function showScreen(screenId) {
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            document.getElementById(screenId).classList.add('active');
+        }
 
-        loading.style.display = 'block';
-        statusDisplay.style.display = 'none';
+        // 照合ロジック
+        function checkProcess() {
+            const targetLoc = shelfIn.value.trim().toUpperCase();
+            const qrData = qrIn.value.split(',');
 
-        try {
-            // ③ データ取得 (URLまたはローカルのモック)
-            // 実際は: const res = await fetch(`URL?jan=${janCode}`);
-            // 今回はテスト用に擬似データを返します
-            const mockData = await getMockData(janCode); 
+            if (qrData.length < 5) {
+                alert("QR形式エラー");
+                return;
+            }
+
+            const pCode = qrData[2];
+            const pQty  = qrData[3];
+            const pLoc  = qrData[4].trim().toUpperCase();
+            const isMatch = (targetLoc === pLoc);
+
+            const resArea = document.getElementById('result-area');
+            const qtyDisp = document.getElementById('qty-display');
             
-            // ④⑤ 比較
-            const currentShelf = mockData.shelf_no;
-            const isMatch = (inputShelf === currentShelf);
+            resArea.style.display = 'block';
+            resArea.className = isMatch ? 'ok' : 'ng';
+            document.getElementById('status-text').innerText = isMatch ? "【照合一致】" : "【照合NG】";
+            document.getElementById('res-code').innerText = pCode;
+            document.getElementById('res-loc').innerText = pLoc;
 
-            // ⑥ 照合結果表示
-            showResult(isMatch, inputShelf, currentShelf, janCode);
-
-            // ⑦ 保存 (CSV用データの構築)
-            recordedLogs.push({
-                jan: janCode,              // 1. 商品コード
-                type: "出庫",               // 2. 入力タイプ
-                old: currentShelf,         // 3. 前回内容
-                new: inputShelf,           // 4. 更新内容
-                time: new Date().toLocaleString(), // 5. 送信日時
-                content: isMatch ? "一致" : "不一致", // 6. 内容
-                extra: ""                  // 7. 予備
-            });
-
-            // 次のスキャンのためにJANを空にする
-            janInput.value = "";
-            janInput.focus();
-
-        } catch (err) {
-            alert("データ取得エラー");
-        } finally {
-            loading.style.display = 'none';
-        }
-    }
-
-    function showResult(isMatch, input, current, jan) {
-        statusDisplay.style.display = 'block';
-        statusDisplay.className = isMatch ? 'success' : 'error';
-        document.getElementById('res-status').innerText = isMatch ? "● 照合一致" : "！ 照合NG";
-        document.getElementById('out-input-shelf').innerText = input;
-        document.getElementById('out-current-shelf').innerText = current;
-        document.getElementById('out-jan').innerText = jan;
-
-        // HTのバイブレーション（対応機種のみ）
-        if (!isMatch && navigator.vibrate) navigator.vibrate([300, 100, 300]);
-    }
-
-    // ⑧ CSV出力
-    function downloadCSV() {
-        if (recordedLogs.length === 0) {
-            alert("保存するデータがありません");
-            return;
+            if (isMatch) {
+                qtyDisp.style.display = 'block';
+                document.getElementById('qty-display').innerText = pQty;
+                logs.push([pCode, "出庫", pLoc, targetLoc, new Date().toLocaleString(), "一致"].join(','));
+                qrIn.value = "";
+                qrIn.focus();
+            } else {
+                qtyDisp.style.display = 'none';
+                setTimeout(() => {
+                    resArea.style.display = 'none';
+                    qrIn.value = "";
+                    qrIn.focus();
+                }, 2000);
+            }
         }
 
-        let csv = "商品コード,入力タイプ,前回内容,更新内容,送信日時,内容,予備\n";
-        recordedLogs.forEach(row => {
-            csv += `${row.jan},${row.type},${row.old},${row.new},${row.time},${row.content},${row.extra}\n`;
-        });
-
-        const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csv], { type: 'text/csv;charset=utf-8' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `shukko_${new Date().getTime()}.csv`;
-        a.click();
-        
-        resetAll();
-    }
-
-    function resetAll() {
-        recordedLogs = [];
-        shelfInput.value = "";
-        janInput.value = "";
-        statusDisplay.style.display = 'none';
-        shelfInput.focus();
-    }
-
-    // テスト用のダミーデータ取得関数
-    function getMockData(jan) {
-        return new Promise((resolve) => {
-            setTimeout(() => {
-                resolve({
-                    product_code: jan,
-                    shelf_no: "A-101" // 全てA-101が正解というテスト設定
-                });
-            }, 500);
-        });
-    }
-</script>
+        function downloadCSV() {
+            if (logs.length === 0) return alert("データがありません");
+            const content = "品番,タイプ,旧ロケ,新ロケ,日時,結果\n" + logs.join('\n');
+            const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), content], {type: 'text/csv'});
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = "shukko_result.csv";
+            a.click();
+        }
+    </script>
 </body>
 </html>
